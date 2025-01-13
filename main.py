@@ -35,6 +35,9 @@ def calculate_relevance_score(query, document, doc_freqs, global_freqs, weight=0
     
     for word in query_words:
         local_weight = doc_freqs.get(word, 0)
+        if local_weight > 0:
+            score += 1
+
         global_weight = global_freqs.get(word, 1.0 / sum(global_freqs.values()))
         combined_weight = weight * local_weight + (1 - weight) * global_weight
         score += math.log(combined_weight) if combined_weight > 0 else math.log(float('1e-10'))
