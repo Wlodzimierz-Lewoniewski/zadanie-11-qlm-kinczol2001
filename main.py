@@ -1,59 +1,56 @@
 import math
 
-def split_into_words(text):
-    return text.lower().split()
+def tokenize(text):
+    return text.lower().replace('.', '').split()
 
-def calculate_global_word_frequencies(documents):
-    word_counts = {}
-    unique_words = set()
-    
+def calculate_corpus_model(documents):
+    all_terms = []
     for doc in documents:
-        words = split_into_words(doc)
-        for word in words:
-            word_counts[word] = word_counts.get(word, 0) + 1
-            unique_words.add(word)
+        all_terms.extend(tokenize(doc))
     
-    total_words = sum(word_counts.values())
-    vocabulary_size = len(unique_words)
-    
-    return {word: (count + 1)/(total_words + vocabulary_size) 
-            for word, count in word_counts.items()}
+    total_terms = len(all_terms)
+    term_counts = {}
+    for term in all_terms:
+        term_counts[term] = term_counts.get(term, 0) + 1
+        
+    return term_counts, total_terms
 
-def calculate_document_word_frequencies(document):
-    words = split_into_words(document)
-    total_words = len(words)
-    word_counts = {}
+def calculate_document_model(document):
+    tokens = tokenize(document)
+    term_counts = {}
     
-    for word in words:
-        word_counts[word] = word_counts.get(word, 0) + 1
-    
-    return {word: count/total_words for word, count in word_counts.items()}, total_words
+    for token in tokens:
+        term_counts[token] = term_counts.get(token, 0) + 1
+        
+    return term_counts, len(tokens)
 
-def calculate_relevance_score(query, document, doc_freqs, global_freqs, weight=0.5):
-    query_words = split_into_words(query)
-    score = 0.0
+def calculate_query_likelihood(query, doc_counts, doc_size, corpus_counts, corpus_size, lambda_param=0.5):
+    query_terms = tokenize(query)
+    log_prob = 0.0
     
-    for word in query_words:
-        local_weight = doc_freqs.get(word, 0)
-        if local_weight > 0:
-            score += 1
-
-        global_weight = global_freqs.get(word, 1.0 / sum(global_freqs.values()))
-        combined_weight = weight * local_weight + (1 - weight) * global_weight
-        score += math.log(combined_weight) if combined_weight > 0 else math.log(float('1e-10'))
-    
-    return score
+    for term in query_terms:
+        p_w_d = (doc_counts.get(term, 0) / doc_size) if doc_size > 0 else 0
+        p_w_c = corpus_counts.get(term, 0) / corpus_size if corpus_size > 0 else 0
+        
+        p_w = lambda_param * p_w_d + (1 - lambda_param) * p_w_c
+        
+        if p_w > 0:
+            log_prob += math.log(p_w)
+            
+    return log_prob
 
 def rank_documents(n, documents, query):
-    global_frequencies = calculate_global_word_frequencies(documents)
-    document_scores = []
+    corpus_counts, corpus_size = calculate_corpus_model(documents)
+    scores = []
     
     for i, doc in enumerate(documents):
-        doc_frequencies, _ = calculate_document_word_frequencies(doc)
-        score = calculate_relevance_score(query, doc, doc_frequencies, global_frequencies)
-        document_scores.append((i, score))
+        doc_counts, doc_size = calculate_document_model(doc)
+        score = calculate_query_likelihood(query, doc_counts, doc_size, 
+                                        corpus_counts, corpus_size)
+        scores.append((i, score))
     
-    return [i for i, _ in sorted(document_scores, key=lambda x: (-x[1], x[0]))]
+    scores.sort(key=lambda x: (-x[1], x[0]))
+    return [idx for idx, _ in scores]
 
 if __name__ == "__main__":
     n = int(input())
